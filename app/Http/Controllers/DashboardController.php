@@ -14,34 +14,56 @@ class DashboardController extends Controller
     public function __invoke(Request $request): Response
     {
         $user = $request->user();
-        $totalProblems = Problem::query()->count();
-        $solved = UserProblemStat::query()->where('user_id', $user->id)->where('status', UserProblemStat::STATUS_SOLVED)->count();
-        $attempted = UserProblemStat::query()->where('user_id', $user->id)->where('status', UserProblemStat::STATUS_ATTEMPTED)->count();
-        $touched = UserProblemStat::query()->where('user_id', $user->id)->count();
 
-        $percent = $totalProblems > 0 ? round(($solved / $totalProblems) * 100, 1) : 0;
+        try {
+            $totalProblems = Problem::query()->count();
+            $solved = UserProblemStat::query()->where('user_id', $user->id)->where('status', UserProblemStat::STATUS_SOLVED)->count();
+            $attempted = UserProblemStat::query()->where('user_id', $user->id)->where('status', UserProblemStat::STATUS_ATTEMPTED)->count();
+            $touched = UserProblemStat::query()->where('user_id', $user->id)->count();
 
-        $recent = UserProblemStat::query()
-            ->with('problem:id,pbinfo_id,title,url')
-            ->where('user_id', $user->id)
-            ->whereNotNull('last_submission_at')
-            ->orderByDesc('last_submission_at')
-            ->limit(8)
-            ->get()
-            ->map(fn (UserProblemStat $stat) => [
-                'id' => $stat->problem?->pbinfo_id,
-                'title' => $stat->problem?->title,
-                'url' => $stat->problem?->url,
-                'score' => $stat->best_score,
-                'status' => $stat->status,
-                'at' => optional($stat->last_submission_at)?->toIso8601String(),
+            $percent = $totalProblems > 0 ? round(($solved / $totalProblems) * 100, 1) : 0;
+
+            $recent = UserProblemStat::query()
+                ->with('problem:id,pbinfo_id,title,url')
+                ->where('user_id', $user->id)
+                ->whereNotNull('last_submission_at')
+                ->orderByDesc('last_submission_at')
+                ->limit(8)
+                ->get()
+                ->map(fn (UserProblemStat $stat) => [
+                    'id' => $stat->problem?->pbinfo_id,
+                    'title' => $stat->problem?->title,
+                    'url' => $stat->problem?->url,
+                    'score' => $stat->best_score,
+                    'status' => $stat->status,
+                    'at' => optional($stat->last_submission_at)?->toIso8601String(),
+                ]);
+
+            $latestSync = SyncRun::query()
+                ->where('user_id', $user->id)
+                ->where('type', SyncRun::TYPE_PROGRESS)
+                ->latest('id')
+                ->first();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return Inertia::render('Dashboard', [
+                'stats' => [
+                    'total' => 0,
+                    'solved' => 0,
+                    'attempted' => 0,
+                    'untouched' => 0,
+                    'percent' => 0,
+                ],
+                'recent' => [],
+                'sync' => [
+                    'status' => 'failed',
+                    'at' => null,
+                    'error' => 'Dashboard data unavailable. Try Sync again in a minute.',
+                    'run_status' => null,
+                ],
             ]);
-
-        $latestSync = SyncRun::query()
-            ->where('user_id', $user->id)
-            ->where('type', SyncRun::TYPE_PROGRESS)
-            ->latest('id')
-            ->first();
+        }
 
         return Inertia::render('Dashboard', [
             'stats' => [

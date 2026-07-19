@@ -32,7 +32,8 @@ class SyncUserProgressJob implements ShouldQueue
                 'run' => $this->syncRunId,
                 'error' => $e->getMessage(),
             ]);
-            throw $e;
+            // Do not rethrow: UI already has last_sync_error / SyncRun failed status,
+            // and rethrowing with QUEUE_CONNECTION=sync turns login/dashboard into 500s.
         }
     }
 }

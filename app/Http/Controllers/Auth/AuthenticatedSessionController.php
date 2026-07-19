@@ -54,13 +54,18 @@ class AuthenticatedSessionController extends Controller
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 
-        $run = SyncRun::query()->create([
-            'user_id' => $user->id,
-            'type' => SyncRun::TYPE_PROGRESS,
-            'status' => SyncRun::STATUS_PENDING,
-        ]);
+        // Never fail login because progress sync failed (sync queue / Neon / PbInfo).
+        try {
+            $run = SyncRun::query()->create([
+                'user_id' => $user->id,
+                'type' => SyncRun::TYPE_PROGRESS,
+                'status' => SyncRun::STATUS_PENDING,
+            ]);
 
-        SyncUserProgressJob::dispatch($user->id, $run->id);
+            SyncUserProgressJob::dispatch($user->id, $run->id)->afterResponse();
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return redirect()->intended(route('dashboard', absolute: false));
     }

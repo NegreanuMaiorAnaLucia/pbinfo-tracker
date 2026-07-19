@@ -24,18 +24,32 @@ if [ -z "$APP_KEY" ]; then
   exit 1
 fi
 
-# Reject malformed keys (incorrect length causes RuntimeException in Encrypter
-# during session/cookie crypto — /up works, /login 500s).
+# Prefer a stable key file so encrypted PbInfo credentials survive restarts when
+# the dashboard APP_KEY is malformed. Env APP_KEY still wins when valid.
+APP_KEY_FILE="storage/app/.render_app_key"
+mkdir -p storage/app
 APP_KEY="$(php -r '
 $key = getenv("APP_KEY") ?: "";
+$file = $argv[1];
 $raw = str_starts_with($key, "base64:") ? base64_decode(substr($key, 7), true) : $key;
-if ($raw === false || !in_array(strlen($raw), [16, 32], true)) {
-    fwrite(STDERR, "APP_KEY is invalid length; generating a fresh key for this boot.\n");
-    echo "base64:" . base64_encode(random_bytes(32));
+if ($raw !== false && in_array(strlen($raw), [16, 32], true)) {
+    echo $key;
     exit(0);
 }
-echo $key;
-')"
+if (is_file($file)) {
+    $stored = trim((string) file_get_contents($file));
+    $storedRaw = str_starts_with($stored, "base64:") ? base64_decode(substr($stored, 7), true) : $stored;
+    if ($storedRaw !== false && in_array(strlen($storedRaw), [16, 32], true)) {
+        fwrite(STDERR, "APP_KEY env invalid; reusing key from storage/app/.render_app_key\n");
+        echo $stored;
+        exit(0);
+    }
+}
+$fresh = "base64:" . base64_encode(random_bytes(32));
+file_put_contents($file, $fresh);
+fwrite(STDERR, "APP_KEY invalid/missing length; generated and saved to storage/app/.render_app_key\n");
+echo $fresh;
+' "$APP_KEY_FILE")"
 export APP_KEY
 
 # Force file session/cache on Render free tier so requests do not depend on
@@ -47,6 +61,8 @@ export SESSION_ENCRYPT=false
 export SESSION_SECURE_COOKIE=true
 export DB_CONNECTION="${DB_CONNECTION:-pgsql}"
 export DB_SSLMODE="${DB_SSLMODE:-require}"
+export LOG_CHANNEL="${LOG_CHANNEL:-stderr}"
+export LOG_LEVEL="${LOG_LEVEL:-info}"
 
 php artisan config:clear || true
 
@@ -71,7 +87,7 @@ run_migrations() {
     return 0
   fi
 
-  echo "WARNING: migrations failed; app is up but DB-backed features may error."
+  echo "WARNING: migrations failed this attempt."
   return 1
 }
 
@@ -84,7 +100,18 @@ if ! kill -0 "$SERVER_PID" 2>/dev/null; then
   exit 1
 fi
 
-run_migrations || true
+# Retry migrations while /up stays healthy — Neon free can take a while to wake.
+attempt=1
+max_attempts=12
+until run_migrations; do
+  if [ "$attempt" -ge "$max_attempts" ]; then
+    echo "WARNING: migrations still failing after ${max_attempts} attempts; DB routes will 503."
+    break
+  fi
+  echo "Retrying migrations in 10s (attempt ${attempt}/${max_attempts})..."
+  attempt=$((attempt + 1))
+  sleep 10
+done
 
 echo "Ready. Waiting on HTTP server (pid ${SERVER_PID})."
 wait "$SERVER_PID"

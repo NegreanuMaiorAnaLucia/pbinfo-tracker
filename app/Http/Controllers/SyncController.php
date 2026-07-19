@@ -30,7 +30,7 @@ class SyncController extends Controller
             'status' => SyncRun::STATUS_PENDING,
         ]);
 
-        SyncUserProgressJob::dispatch($user->id, $run->id);
+        SyncUserProgressJob::dispatch($user->id, $run->id)->afterResponse();
 
         return back()->with('status', 'Progress sync started.');
     }
@@ -51,7 +51,7 @@ class SyncController extends Controller
             'status' => SyncRun::STATUS_PENDING,
         ]);
 
-        SyncCatalogJob::dispatch($run->id);
+        SyncCatalogJob::dispatch($run->id)->afterResponse();
 
         return back()->with('status', 'Catalog sync started.');
     }

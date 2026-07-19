@@ -26,7 +26,7 @@ class SyncCatalogJob implements ShouldQueue
             $service->sync($run);
         } catch (\Throwable $e) {
             Log::error('Catalog sync failed', ['error' => $e->getMessage(), 'run' => $this->syncRunId]);
-            throw $e;
+            // Swallow so sync queue / afterResponse cannot 500 the HTTP request.
         }
     }
 }
