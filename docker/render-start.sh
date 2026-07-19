@@ -9,6 +9,11 @@ if [ -n "$DATABASE_URL" ] && [ -z "$DB_URL" ]; then
   export DB_URL="$DATABASE_URL"
 fi
 
+# Neon pooler (PgBouncer) breaks Laravel migrations/DDL — use the direct host.
+if [ -n "$DB_URL" ]; then
+  export DB_URL="$(printf '%s' "$DB_URL" | sed 's/-pooler././g')"
+fi
+
 if [ -n "$RENDER_EXTERNAL_URL" ]; then
   export APP_URL="$RENDER_EXTERNAL_URL"
 fi
