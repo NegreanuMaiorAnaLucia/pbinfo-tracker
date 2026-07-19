@@ -30,7 +30,11 @@ export DB_CONNECTION="${DB_CONNECTION:-pgsql}"
 export DB_SSLMODE="${DB_SSLMODE:-require}"
 
 php artisan config:clear || true
-php artisan migrate --force --no-interaction
+
+if ! php artisan migrate --force --no-interaction; then
+  echo "Initial migrate failed (often Neon Auth leftover tables). Running migrate:fresh once..."
+  php artisan migrate:fresh --force --no-interaction
+fi
 
 PORT="${PORT:-10000}"
 exec php artisan serve --host=0.0.0.0 --port="$PORT"
