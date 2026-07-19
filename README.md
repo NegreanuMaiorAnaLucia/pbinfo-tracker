@@ -98,6 +98,14 @@ docker compose exec app php artisan pbinfo:sync catalog
 - Login is rate-limited.
 - Use HTTPS in production.
 
+# Free cloud (Render)
+# 1. Deploy Blueprint from this repo on Render
+# 2. Create a free Postgres DB on https://console.neon.tech
+# 3. In Render → Environment set:
+#    APP_KEY=<php artisan key:generate --show>
+#    DB_URL=postgresql://USER:PASS@HOST/DB?sslmode=require
+# 4. Share your Render URL with family (browser login only)
+
 ## Known gotcha: PbInfo blocking
 
 PbInfo sometimes returns **HTTP 403** to datacenter IPs or non-browser clients. If login/sync fails:
