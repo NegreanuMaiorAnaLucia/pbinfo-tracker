@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\SyncUserProgressJob;
 use App\Models\SyncRun;
 use App\Services\PbInfo\Exceptions\PbInfoAuthException;
+use App\Services\PbInfo\Exceptions\PbInfoRequestException;
 use App\Services\PbInfo\PbInfoAuthService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -47,6 +48,12 @@ class AuthenticatedSessionController extends Controller
             RateLimiter::hit($key, 60);
             throw ValidationException::withMessages([
                 'username' => $e->getMessage(),
+            ]);
+        } catch (PbInfoRequestException $e) {
+            RateLimiter::hit($key, 60);
+            report($e);
+            throw ValidationException::withMessages([
+                'username' => 'PbInfo is temporarily unreachable. Please try again in a minute.',
             ]);
         }
 

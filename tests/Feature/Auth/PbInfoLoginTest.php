@@ -6,6 +6,7 @@ use App\Jobs\SyncUserProgressJob;
 use App\Models\SyncRun;
 use App\Models\User;
 use App\Services\PbInfo\Exceptions\PbInfoAuthException;
+use App\Services\PbInfo\Exceptions\PbInfoRequestException;
 use App\Services\PbInfo\PbInfoAuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -58,6 +59,24 @@ class PbInfoLoginTest extends TestCase
         $response = $this->from('/login')->post('/login', [
             'username' => 'bad',
             'password' => 'bad',
+        ]);
+
+        $response->assertRedirect('/login');
+        $response->assertSessionHasErrors('username');
+        $this->assertGuest();
+    }
+
+    public function test_pbinfo_network_errors_show_form_error_not_500(): void
+    {
+        $auth = Mockery::mock(PbInfoAuthService::class);
+        $auth->shouldReceive('authenticate')
+            ->once()
+            ->andThrow(new PbInfoRequestException('PbInfo returned HTTP 403 for POST /'));
+        $this->app->instance(PbInfoAuthService::class, $auth);
+
+        $response = $this->from('/login')->post('/login', [
+            'username' => 'demo_user',
+            'password' => 'secret',
         ]);
 
         $response->assertRedirect('/login');
