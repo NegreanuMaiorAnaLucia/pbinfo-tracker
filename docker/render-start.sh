@@ -3,7 +3,8 @@ set -e
 
 cd /var/www/html
 
-mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+chmod -R 775 storage bootstrap/cache || true
 
 if [ -n "$DATABASE_URL" ] && [ -z "$DB_URL" ]; then
   export DB_URL="$DATABASE_URL"
@@ -23,18 +24,53 @@ if [ -z "$APP_KEY" ]; then
   exit 1
 fi
 
+# Force file session/cache on Render free tier so requests do not depend on
+# Neon/sessions tables (database driver caused RuntimeException on session.store).
 export QUEUE_CONNECTION="${QUEUE_CONNECTION:-sync}"
-export CACHE_STORE="${CACHE_STORE:-database}"
-export SESSION_DRIVER="${SESSION_DRIVER:-database}"
+export CACHE_STORE=file
+export SESSION_DRIVER=file
+export SESSION_ENCRYPT=false
+export SESSION_SECURE_COOKIE=true
 export DB_CONNECTION="${DB_CONNECTION:-pgsql}"
 export DB_SSLMODE="${DB_SSLMODE:-require}"
 
 php artisan config:clear || true
 
-if ! php artisan migrate --force --no-interaction; then
+PORT="${PORT:-10000}"
+
+# Bind HTTP immediately so Render health checks (/up) succeed while Neon wakes
+# and migrations run. Blocking on migrate before serve caused 120s timeouts.
+echo "Starting HTTP server on 0.0.0.0:${PORT}..."
+php artisan serve --host=0.0.0.0 --port="$PORT" &
+SERVER_PID=$!
+
+run_migrations() {
+  echo "Running database migrations..."
+  if php artisan migrate --force --no-interaction; then
+    echo "Migrations completed."
+    return 0
+  fi
+
   echo "Initial migrate failed (often Neon Auth leftover tables). Running migrate:fresh once..."
-  php artisan migrate:fresh --force --no-interaction
+  if php artisan migrate:fresh --force --no-interaction; then
+    echo "migrate:fresh completed."
+    return 0
+  fi
+
+  echo "WARNING: migrations failed; app is up but DB-backed features may error."
+  return 1
+}
+
+# Give the server a moment to bind before DB work.
+sleep 2
+
+if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+  echo "HTTP server exited unexpectedly during startup."
+  wait "$SERVER_PID"
+  exit 1
 fi
 
-PORT="${PORT:-10000}"
-exec php artisan serve --host=0.0.0.0 --port="$PORT"
+run_migrations || true
+
+echo "Ready. Waiting on HTTP server (pid ${SERVER_PID})."
+wait "$SERVER_PID"

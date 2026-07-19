@@ -25,10 +25,12 @@ services:
       - key: QUEUE_CONNECTION
         value: sync
       - key: CACHE_STORE
-        value: database
+        value: file
       - key: SESSION_DRIVER
-        value: database
+        value: file
       - key: SESSION_ENCRYPT
+        value: "false"
+      - key: SESSION_SECURE_COOKIE
         value: "true"
       - key: APP_KEY
         sync: false
