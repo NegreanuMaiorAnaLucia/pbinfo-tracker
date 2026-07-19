@@ -24,6 +24,20 @@ if [ -z "$APP_KEY" ]; then
   exit 1
 fi
 
+# Reject malformed keys (incorrect length causes RuntimeException in Encrypter
+# during session/cookie crypto — /up works, /login 500s).
+APP_KEY="$(php -r '
+$key = getenv("APP_KEY") ?: "";
+$raw = str_starts_with($key, "base64:") ? base64_decode(substr($key, 7), true) : $key;
+if ($raw === false || !in_array(strlen($raw), [16, 32], true)) {
+    fwrite(STDERR, "APP_KEY is invalid length; generating a fresh key for this boot.\n");
+    echo "base64:" . base64_encode(random_bytes(32));
+    exit(0);
+}
+echo $key;
+')"
+export APP_KEY
+
 # Force file session/cache on Render free tier so requests do not depend on
 # Neon/sessions tables (database driver caused RuntimeException on session.store).
 export QUEUE_CONNECTION="${QUEUE_CONNECTION:-sync}"
