@@ -1,4 +1,5 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 
 function ProgressRing({ percent }) {
@@ -41,10 +42,32 @@ function ProgressRing({ percent }) {
 }
 
 export default function Dashboard({ stats, recent, sync }) {
-    const syncing = ['pending', 'running'].includes(sync?.run_status);
+    const flashStatus = usePage().props.flash?.status;
+    const [busy, setBusy] = useState(false);
+    const syncing = busy || ['pending', 'running'].includes(sync?.run_status);
+
+    useEffect(() => {
+        if (!['pending', 'running'].includes(sync?.run_status)) {
+            return undefined;
+        }
+
+        const id = window.setInterval(() => {
+            router.reload({ only: ['stats', 'recent', 'sync'], preserveScroll: true });
+        }, 2500);
+
+        return () => window.clearInterval(id);
+    }, [sync?.run_status]);
 
     const syncNow = () => {
-        router.post(route('sync.progress'));
+        setBusy(true);
+        router.post(
+            route('sync.progress'),
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => setBusy(false),
+            },
+        );
     };
 
     return (
@@ -69,6 +92,9 @@ export default function Dashboard({ stats, recent, sync }) {
                         {sync?.at ? new Date(sync.at).toLocaleString() : 'never'}
                         {sync?.status ? ` · ${sync.status}` : ''}
                     </p>
+                    {flashStatus && (
+                        <p className="max-w-xs font-mono text-[11px] text-accent">{flashStatus}</p>
+                    )}
                     {sync?.error && (
                         <p className="max-w-xs font-mono text-[11px] text-danger">{sync.error}</p>
                     )}

@@ -14,6 +14,9 @@ class CatalogSyncService
 
     public function sync(SyncRun $run, int $maxPagesPerCategory = 30): void
     {
+        set_time_limit(900);
+        ini_set('max_execution_time', '900');
+
         $run->markRunning();
 
         try {

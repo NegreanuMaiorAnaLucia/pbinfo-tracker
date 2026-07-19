@@ -17,6 +17,9 @@ class ProgressSyncService
 
     public function sync(User $user, SyncRun $run): void
     {
+        set_time_limit(300);
+        ini_set('max_execution_time', '300');
+
         $run->markRunning();
 
         try {

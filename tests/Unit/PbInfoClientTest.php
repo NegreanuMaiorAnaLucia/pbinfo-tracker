@@ -42,4 +42,15 @@ class PbInfoClientTest extends TestCase
         $this->assertSame(70, $aggregated[42]['best_score']);
         $this->assertSame(0, $aggregated[99]['best_score']);
     }
+
+    public function test_extract_logged_in_username_ignores_feed_profile_links(): void
+    {
+        $html = file_get_contents(__DIR__.'/../Fixtures/pbinfo/logged-in-with-feed.html');
+        $client = new PbInfoClient(requestDelayMs: 0);
+
+        $method = new \ReflectionMethod(PbInfoClient::class, 'extractLoggedInUsername');
+        $method->setAccessible(true);
+
+        $this->assertSame('ananm_07', $method->invoke($client, $html));
+    }
 }

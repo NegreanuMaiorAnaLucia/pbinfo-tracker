@@ -61,14 +61,18 @@ class AuthenticatedSessionController extends Controller
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 
-        // Never fail login because progress sync failed (sync queue / Neon / PbInfo).
+        // Never fail login because progress sync failed.
         try {
+            SyncRun::expireStale(userId: $user->id, type: SyncRun::TYPE_PROGRESS);
+
             $run = SyncRun::query()->create([
                 'user_id' => $user->id,
                 'type' => SyncRun::TYPE_PROGRESS,
                 'status' => SyncRun::STATUS_PENDING,
             ]);
 
+            // After redirect so login is not killed by PHP's 30s limit while scraping.
+            set_time_limit(300);
             SyncUserProgressJob::dispatch($user->id, $run->id)->afterResponse();
         } catch (\Throwable $e) {
             report($e);

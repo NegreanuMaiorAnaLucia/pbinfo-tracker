@@ -9,7 +9,7 @@ use App\Services\PbInfo\Exceptions\PbInfoAuthException;
 use App\Services\PbInfo\Exceptions\PbInfoRequestException;
 use App\Services\PbInfo\PbInfoAuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Bus;
 use Mockery;
 use Tests\TestCase;
 
@@ -17,9 +17,9 @@ class PbInfoLoginTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_successful_login_redirects_even_if_sync_dispatch_is_deferred(): void
+    public function test_successful_login_redirects_and_queues_progress_sync(): void
     {
-        Queue::fake();
+        Bus::fake([SyncUserProgressJob::class]);
 
         $user = User::factory()->create([
             'username' => 'demo_user',
@@ -45,7 +45,7 @@ class PbInfoLoginTest extends TestCase
             'type' => SyncRun::TYPE_PROGRESS,
             'status' => SyncRun::STATUS_PENDING,
         ]);
-        Queue::assertPushed(SyncUserProgressJob::class);
+        Bus::assertDispatched(SyncUserProgressJob::class);
     }
 
     public function test_failed_pbinfo_auth_does_not_log_in(): void

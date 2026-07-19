@@ -20,6 +20,9 @@ class SyncCatalogJob implements ShouldQueue
 
     public function handle(CatalogSyncService $service): void
     {
+        set_time_limit(900);
+        ini_set('max_execution_time', '900');
+
         $run = SyncRun::query()->findOrFail($this->syncRunId);
 
         try {

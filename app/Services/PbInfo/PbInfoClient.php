@@ -29,7 +29,8 @@ class PbInfoClient
         $this->maxRetries = $maxRetries;
         $this->http = $http ?? new Client([
             'base_uri' => self::BASE_URL,
-            'timeout' => 30,
+            'timeout' => 20,
+            'connect_timeout' => 10,
             'http_errors' => false,
             'cookies' => $this->cookies,
             'headers' => [
@@ -65,6 +66,24 @@ class PbInfoClient
      */
     public function login(string $username, string $password): array
     {
+        // Fresh jar so a previous session cannot leak into this login.
+        $this->cookies = new CookieJar;
+        $this->http = new Client([
+            'base_uri' => self::BASE_URL,
+            'timeout' => 20,
+            'connect_timeout' => 10,
+            'http_errors' => false,
+            'cookies' => $this->cookies,
+            'headers' => [
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Accept-Language' => 'ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Cache-Control' => 'no-cache',
+                'Pragma' => 'no-cache',
+                'Upgrade-Insecure-Requests' => '1',
+            ],
+        ]);
+
         $this->request('GET', '/');
 
         $response = $this->request('POST', '/', [
@@ -86,7 +105,10 @@ class PbInfoClient
             throw new PbInfoAuthException('Invalid PbInfo username or password.');
         }
 
-        $resolvedUsername = $this->extractLoggedInUsername($body) ?? $username;
+        // Never trust arbitrary /profil/ links on the page (homepage activity feeds).
+        // Prefer the account widget; otherwise keep the username the user typed.
+        $fromWidget = $this->extractLoggedInUsername($body);
+        $resolvedUsername = $fromWidget ?: $username;
 
         return [
             'username' => $resolvedUsername,
@@ -141,7 +163,9 @@ class PbInfoClient
                 'id' => $id,
                 'denumire' => (string) ($entry['denumire'] ?? $entry['titlu'] ?? 'Problema '.$id),
                 'scor' => (int) ($entry['scor'] ?? $entry['score'] ?? 0),
-                'data' => isset($entry['data']) ? (string) $entry['data'] : null,
+                'data' => isset($entry['data'])
+                    ? (string) $entry['data']
+                    : (isset($entry['data_upload']) ? (string) $entry['data_upload'] : null),
             ];
         }
 
@@ -404,7 +428,12 @@ class PbInfoClient
 
     private function extractLoggedInUsername(string $html): ?string
     {
-        if (preg_match('#/profil/([A-Za-z0-9._-]+)#', $html, $m)) {
+        // Only accept the logged-in user widget — not random profile links in feeds.
+        if (preg_match('#pbi-widget-user[\s\S]{0,400}?/profil/([A-Za-z0-9._-]+)#i', $html, $m)) {
+            return $m[1];
+        }
+
+        if (preg_match('#user_autentificat\s*=\s*\{[^}]*?"(?:username|user|login)"\s*:\s*"([A-Za-z0-9._-]+)"#i', $html, $m)) {
             return $m[1];
         }
 

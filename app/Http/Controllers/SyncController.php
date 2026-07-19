@@ -14,6 +14,8 @@ class SyncController extends Controller
     {
         $user = $request->user();
 
+        SyncRun::expireStale(userId: $user->id, type: SyncRun::TYPE_PROGRESS, olderThanSeconds: 300);
+
         $running = SyncRun::query()
             ->where('user_id', $user->id)
             ->where('type', SyncRun::TYPE_PROGRESS)
@@ -30,6 +32,9 @@ class SyncController extends Controller
             'status' => SyncRun::STATUS_PENDING,
         ]);
 
+        // After response: browser gets "Syncing…" immediately, dashboard polls,
+        // and PHP is not killed by the default 30s request limit mid-page-render.
+        set_time_limit(300);
         SyncUserProgressJob::dispatch($user->id, $run->id)->afterResponse();
 
         return back()->with('status', 'Progress sync started.');
@@ -37,6 +42,8 @@ class SyncController extends Controller
 
     public function catalog(Request $request): RedirectResponse
     {
+        SyncRun::expireStale(type: SyncRun::TYPE_CATALOG, olderThanSeconds: 900);
+
         $running = SyncRun::query()
             ->where('type', SyncRun::TYPE_CATALOG)
             ->whereIn('status', [SyncRun::STATUS_PENDING, SyncRun::STATUS_RUNNING])
@@ -51,8 +58,9 @@ class SyncController extends Controller
             'status' => SyncRun::STATUS_PENDING,
         ]);
 
+        set_time_limit(900);
         SyncCatalogJob::dispatch($run->id)->afterResponse();
 
-        return back()->with('status', 'Catalog sync started.');
+        return back()->with('status', 'Catalog sync started. This can take several minutes.');
     }
 }

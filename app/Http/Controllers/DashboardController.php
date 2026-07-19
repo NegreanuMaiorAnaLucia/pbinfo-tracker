@@ -14,6 +14,7 @@ class DashboardController extends Controller
     public function __invoke(Request $request): Response
     {
         $user = $request->user();
+        SyncRun::expireStale(userId: $user->id, type: SyncRun::TYPE_PROGRESS, olderThanSeconds: 600);
 
         try {
             $totalProblems = Problem::query()->count();
@@ -77,7 +78,7 @@ class DashboardController extends Controller
             'sync' => [
                 'status' => $user->last_sync_status ?? $latestSync?->status,
                 'at' => optional($user->last_sync_at)?->toIso8601String(),
-                'error' => $user->last_sync_error,
+                'error' => $user->last_sync_error ?? $latestSync?->error_log,
                 'run_status' => $latestSync?->status,
             ],
         ]);

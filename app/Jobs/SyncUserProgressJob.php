@@ -21,6 +21,9 @@ class SyncUserProgressJob implements ShouldQueue
 
     public function handle(ProgressSyncService $service): void
     {
+        set_time_limit(300);
+        ini_set('max_execution_time', '300');
+
         $user = User::query()->findOrFail($this->userId);
         $run = SyncRun::query()->findOrFail($this->syncRunId);
 

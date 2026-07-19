@@ -67,7 +67,7 @@ class ProblemController extends Controller
             ->through(fn (Problem $problem) => [
                 'id' => $problem->pbinfo_id,
                 'title' => $problem->title,
-                'url' => $problem->url,
+                'url' => $problem->url .'/'.$problem->slug,
                 'difficulty' => $problem->difficulty,
                 'category' => $problem->category?->name,
                 'score' => $problem->best_score ?? 0,

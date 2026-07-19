@@ -18,11 +18,20 @@ class PbInfoAuthService
     {
         $result = $this->client->login($username, $password);
 
-        $user = User::query()->firstOrNew(['username' => $result['username']]);
+        // Identity comes from the credentials the user typed, not homepage scrapes.
+        $canonical = $username;
+        if (
+            is_string($result['username'] ?? null)
+            && strcasecmp($result['username'], $username) === 0
+        ) {
+            $canonical = $result['username'];
+        }
+
+        $user = User::query()->firstOrNew(['username' => $canonical]);
 
         $user->fill([
-            'name' => $result['username'],
-            'email' => $user->email ?: Str::lower($result['username']).'@pbinfo.local',
+            'name' => $canonical,
+            'email' => $user->email ?: Str::lower($canonical).'@pbinfo.local',
             'pbinfo_password' => $password,
             'pbinfo_cookies' => $result['cookies'],
             'pbinfo_cookies_at' => now(),

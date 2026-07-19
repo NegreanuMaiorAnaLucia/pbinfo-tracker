@@ -75,4 +75,31 @@ class SyncRun extends Model
             'finished_at' => now(),
         ]);
     }
+
+    /**
+     * Mark abandoned pending/running runs as failed so they cannot block Sync now forever
+     * (e.g. database queue with no worker, or a crashed request).
+     */
+    public static function expireStale(int $olderThanSeconds = 120, ?int $userId = null, ?string $type = null): int
+    {
+        $query = static::query()
+            ->whereIn('status', [self::STATUS_PENDING, self::STATUS_RUNNING])
+            ->where('created_at', '<', now()->subSeconds($olderThanSeconds));
+
+        if ($userId !== null) {
+            $query->where('user_id', $userId);
+        }
+
+        if ($type !== null) {
+            $query->where('type', $type);
+        }
+
+        $count = 0;
+        foreach ($query->get() as $run) {
+            $run->markFailed('Sync timed out or was abandoned (no queue worker / interrupted). Try Sync again.');
+            $count++;
+        }
+
+        return $count;
+    }
 }

@@ -20,14 +20,13 @@ cp .env.example .env
 php artisan key:generate
 touch database/database.sqlite
 php artisan migrate
-npm install
-npm run dev
-# other terminal
+npm install && npm run build
 php artisan serve
-php artisan queue:work
 ```
 
 Open `http://127.0.0.1:8000`, sign in with your PbInfo account, then use **Sync now**.
+
+Local default uses `QUEUE_CONNECTION=sync` so sync runs in the same request — you do **not** need `queue:work`.
 
 ### Useful commands
 
